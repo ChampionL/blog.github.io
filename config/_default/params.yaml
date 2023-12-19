@@ -791,7 +791,7 @@ analytics:
   #baidu: #<anaytics_id>
   # 谷歌统计
   # Google Analytics
-  #google: #<anaytics_id>
+  google: G-39PF1HWVPR
   # 不蒜子统计
   # Show Views / Visitors of the website / page with busuanzi.
   # For more information: http://ibruce.info/2015/04/04/busuanzi/

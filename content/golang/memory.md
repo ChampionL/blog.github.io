@@ -69,6 +69,7 @@ type _type struct {
     ptrToThis typeOff
 }
 ```
+<!--more-->
 
 参考文章： https://www.luozhiyun.com/archives/506
 ```shell

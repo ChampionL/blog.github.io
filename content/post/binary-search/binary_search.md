@@ -74,6 +74,8 @@ func search(nums []int, target int) int {
     return -1
 }
 ```
+
+<!--more-->
 ### 左闭右开区间
 ```go
 func search(nums []int, target int) int {

@@ -7,10 +7,10 @@ date: 2024-01-07T23:35:39+08:00
 lastmod: 2024-01-07T23:35:39+08:00
 
 categories:
-  -
+  - 算法
 tags:
-  -
-  -
+  - 数组
+  - 快慢指针,左右指针,回文串
 
 # 原文作者
 # Post's origin author name
@@ -23,7 +23,7 @@ tags:
 #imgs:
 # 在首页展开内容
 # Expand content on the home page
-#expand: true
+expand: false
 # 外部链接地址，访问时直接跳转
 # It's means that will redirecting to external links
 #extlink:

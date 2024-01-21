@@ -23,7 +23,7 @@ tags:
 #imgs:
 # 在首页展开内容
 # Expand content on the home page
-#expand: true
+expand: false
 # 外部链接地址，访问时直接跳转
 # It's means that will redirecting to external links
 #extlink:

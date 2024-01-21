@@ -76,6 +76,7 @@ func search(nums []int, target int) int {
 ```
 
 <!--more-->
+
 ### 左闭右开区间
 ```go
 func search(nums []int, target int) int {
@@ -272,4 +273,4 @@ func isPerfectSquare(num int) bool {
 - 查找元素插入点位置
 - 查找元素的区间，本质上还是查找插入点位置
 - 求解x的平方根
-<!--more-->
+

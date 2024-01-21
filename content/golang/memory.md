@@ -1,7 +1,7 @@
 ---
 title: "内存管理"
 description: "内存管理"
-keywords: "内存"
+keywords: "源码方式剖析内部管理方式，从基础类型出发，持续更新"
 
 date: 2023-12-27T23:05:02+08:00
 lastmod: 2023-12-27T23:05:02+08:00
@@ -273,4 +273,3 @@ TODO： 类型 interface底层实现 (https://blog.csdn.net/i6448038/article/det
 raceenabled 竞态检测
 https://blog.csdn.net/qq_25341531/article/details/119903651
 
-<!--more-->

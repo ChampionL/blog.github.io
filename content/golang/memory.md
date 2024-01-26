@@ -273,3 +273,31 @@ TODO： 类型 interface底层实现 (https://blog.csdn.net/i6448038/article/det
 raceenabled 竞态检测
 https://blog.csdn.net/qq_25341531/article/details/119903651
 
+内存分配流程
+- runtime.newobject()(malloc.go) 新建对象  
+- func mallocgc(size uintptr, typ *_type, needzero bool) unsafe.Pointer (malloc.go) 申请内存对象
+- mp := acquirem() // 获取当面goroutine的mcache
+- c := getMCache(mp) //获取p的mcache      *mcache
+- if size <= maxSmallSize 32kb
+- if noscan && size < maxTinySize { // 不含有指针，小于16字节对象
+- 当对象小于16字节时候，我们不能直接释放该对象，因为小于16字节对象会通过小对象物体来进行合并到一个16字节对象里
+- tiny allocator 主要为小字符串和独立的转义字符，在json压力测试中，tiny allocator可以减少
+  减少内存分配次数12% 减少堆内存分配20%
+- off = alignUp(off, 8) //调整off成8倍数 调整off的位置使其为8的倍数 4的倍数 2的倍数
+- if off+size <= maxTinySize && c.tiny != 0 { //如果off+size大小小于16字节，并且tiny模块有分配内存块，那么在该tiny块上分配
+- x = unsafe.Pointer(c.tiny + off) //tiny加上偏移量就是需要分配内存
+- c.tinyoffset = off + size
+  c.tinyAllocs++
+  小微对象分配的内存块,更新offset以及微小对象分配数量
+- 如果tiny为空，或者off+size超过了当前tiny对象大小，那么申请分配一个新的内存块，
+- span = c.alloc[tinySpanClass] // tiny对象需要分配16字节 tinySpanClass = 2<<1 + 1 等于 5(136) 从mcache的alloc中获取mspan
+- v := nextFreeFast(span)       //从mspan中获取一个对象块
+- v, span, shouldhelpgc = c.nextFree(tinySpanClass) //如果没有获取到，查看下一个内存块 TODO  
+`tinyAllocs似乎是从0开始，首次分配完成是0 再次分配才是1，似乎如果是首次分配和正常块分配可以处理成一样`
+- 此时申请到了就将该元素作为返回值处理，此时这个块的offset还只是部分
+- 从mcache的alloc数组中查看是否已经有该类型的mspan申请下来，如果有，则在该mspan申请内存
+- 如果该mspan为空，那么从mheap_的cental[spc]的mcentral中调用cacheSpan申请新的mspan
+  将该span挂在mcache的alloc[spc]下
+- s := mheap_.alloc(npages, c.spanclass)  如果mcentral中没有可以利用的mspan 两个spanset扫描也没有
+- base, scav = c.alloc(npages)  从pagecache中分配小内存对象
+- 

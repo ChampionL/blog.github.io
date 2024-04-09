@@ -301,3 +301,121 @@ https://blog.csdn.net/qq_25341531/article/details/119903651
 - s := mheap_.alloc(npages, c.spanclass)  如果mcentral中没有可以利用的mspan 两个spanset扫描也没有
 - base, scav = c.alloc(npages)  从pagecache中分配小内存对象
 - 
+```go
+type heapArena struct {
+	bitmap [heapArenaBitmapWords]uintptr //用1bit表示其中8字节(64)的使用情况，4字节(非64位)的使用情况  整个heapArena区域64M 分成每个word是否在使用，表示一个word的使用情况
+
+	// If the ith bit of noMorePtrs is true, then there are no more
+	// pointers for the object containing the word described by the
+	// high bit of bitmap[i].
+	// In that case, bitmap[i+1], ... must be zero until the start
+	// of the next object.
+	// We never operate on these entries using bit-parallel techniques,
+	// so it is ok if they are small. Also, they can't be bigger than
+	// uint16 because at that size a single noMorePtrs entry
+	// represents 8K of memory, the minimum size of a span. Any larger
+	// and we'd have to worry about concurrent updates.
+	// This array uses 1 bit per word of bitmap, or .024% of the heap size (for 64-bit).
+	noMorePtrs [heapArenaBitmapWords / 8]uint8
+
+	// spans maps from virtual address page ID within this arena to *mspan.
+	// For allocated spans, their pages map to the span itself.
+	// For free spans, only the lowest and highest pages map to the span itself.
+	// Internal pages map to an arbitrary span.
+	// For pages that have never been allocated, spans entries are nil.
+	//
+	// Modifications are protected by mheap.lock. Reads can be
+	// performed without locking, but ONLY from indexes that are
+	// known to contain in-use or stack spans. This means there
+	// must not be a safe-point between establishing that an
+	// address is live and looking it up in the spans array.
+	spans [pagesPerArena]*mspan // pagesPerArena 每个arena有多少个page arena是 heapArenaBytes / pageSize  heapArenaBytes 是64位，pageSize是8kb  可能多个page页面指向的是同一个mspan指针
+
+	// pageInUse is a bitmap that indicates which spans are in
+	// state mSpanInUse. This bitmap is indexed by page number,
+	// but only the bit corresponding to the first page in each
+	// span is used.
+	//
+	// Reads and writes are atomic.
+	pageInUse [pagesPerArena / 8]uint8
+
+	// pageMarks is a bitmap that indicates which spans have any
+	// marked objects on them. Like pageInUse, only the bit
+	// corresponding to the first page in each span is used.
+	//
+	// Writes are done atomically during marking. Reads are
+	// non-atomic and lock-free since they only occur during
+	// sweeping (and hence never race with writes).
+	//
+	// This is used to quickly find whole spans that can be freed.
+	//
+	// TODO(austin): It would be nice if this was uint64 for
+	// faster scanning, but we don't have 64-bit atomic bit
+	// operations.
+	pageMarks [pagesPerArena / 8]uint8
+
+	// pageSpecials is a bitmap that indicates which spans have
+	// specials (finalizers or other). Like pageInUse, only the bit
+	// corresponding to the first page in each span is used.
+	//
+	// Writes are done atomically whenever a special is added to
+	// a span and whenever the last special is removed from a span.
+	// Reads are done atomically to find spans containing specials
+	// during marking.
+	pageSpecials [pagesPerArena / 8]uint8
+
+	// checkmarks stores the debug.gccheckmark state. It is only
+	// used if debug.gccheckmark > 0.
+	checkmarks *checkmarksMap
+
+	// zeroedBase marks the first byte of the first page in this
+	// arena which hasn't been used yet and is therefore already
+	// zero. zeroedBase is relative to the arena base.
+	// Increases monotonically until it hits heapArenaBytes.
+	//
+	// This field is sufficient to determine if an allocation
+	// needs to be zeroed because the page allocator follows an
+	// address-ordered first-fit policy.
+	//
+	// Read atomically and written with an atomic CAS.
+	zeroedBase uintptr
+}
+```
+`bitmap`：该bitmap用一个bit来描述arenaHeap中一个word的使用情况
+`noMorePtrs`:heapArena结构体中的noMorePtrs字段用于标记arena中是否还有指针未被扫描。它的作用是在并发垃圾回收过程中进行同步和优化
+
+mallocinit  内存初始化
+physPageSize&(physPageSize-1) != 0 判断是否是2的次幂
+
+
+```go
+type fixalloc struct {
+	size   uintptr
+	first  func(arg, p unsafe.Pointer) // called first time p is returned
+	arg    unsafe.Pointer
+	list   *mlink
+	chunk  uintptr // use uintptr instead of unsafe.Pointer to avoid write barriers
+	nchunk uint32  // bytes remaining in current chunk
+	nalloc uint32  // size of new chunks in bytes
+	inuse  uintptr // in-use bytes now
+	stat   *sysMemStat
+	zero   bool // zero allocations
+}
+```
+fixalloc是固定size的内存分配，在开始时候指定为固定大小  
+size表示要固定分配的内存大小  
+first表示这个块第一次mmap过来时候需要执行的函数，f.arg 表示这个函数要执行的参数  
+chunk表示当前可以分配的内存大小，可能会多次覆盖这个值，当内存不够时候回信申请内存块来覆盖，  
+fixalloc固定大小为16k,按照size大小取整后 `f.nalloc = uint32(_FixAllocChunk / size * size) `  
+nchunk表示当前这块内存块还剩下多少，表示大小。  
+inuse表示当前的fixalloc有多少内存在使用  
+f.stat 表示sysMemStat 分配了多少内存  
+f.list 如果有不需要再使用了的size大小的内存，需要是否，则会将整个内存清空，只保留第一个字作为指向下一个释放块的大小 
+所以f.list是指向空闲已释放的内存块，如果f.list有空闲对象，则是否出来，同时将其清零。  
+TODO: 如果chunk被覆盖，说明内存已经被完全用完了，如果释放后会被放入list也不会放入chunk中，所以目前看新建chunk  
+之前内存还是能够寻址到  
+
+pageAlloc: https://zhuanlan.zhihu.com/p/603335718
+用于存储256T内存中页的使用信息，bitmap表示了页的使用情况。用于寻找符合连续的几页是空闲的进行分配。
+基数树:  https://ivanzz1001.github.io/records/post/data-structure/2018/11/18/ds-radix-tree
+
